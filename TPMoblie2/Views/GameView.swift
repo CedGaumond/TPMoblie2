@@ -266,6 +266,7 @@ struct GameView: View {
         return location.x >= startX && location.x <= startX + boxWidth &&
                location.y >= dropAreaY && location.y <= dropAreaBottomY
     }
+
     private func checkSolution() {
         let solution = bottomLetters.compactMap { $0 }
         let solutionWord = String(solution)
@@ -276,11 +277,27 @@ struct GameView: View {
         if isCorrectWord {
             // Stop the timer when the player wins
             gameState.stopTimer()
+
+            // Save the solved word to UserDefaults
+            if let currentWord = gameState.currentWord {
+                let timeTaken = Int(gameState.elapsedTime)
+
+                // Create a Word object using the solutionWord and currentWord.secret
+                let solvedWord = Word(word: solutionWord, secret: currentWord.word)
+
+                // Save the solved word with its time
+                SolvedWordsManager.shared.saveSolvedWord(
+                    word: solvedWord,  // Pass the Word object
+                    time: timeTaken    // Pass the time taken
+                )
+            }
             
             // Show the win alert
             showWinAlert = true
         }
     }
+
+
     private func resetGame() {
         gameState.reset()  // Assuming `reset()` is a method in `GameState`
         showWinAlert = false  // Hide the alert

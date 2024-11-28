@@ -1,17 +1,11 @@
-//
-//  HomeView.swift
-//  TPMoblie2
-//
-//  Created by cedrick Gaumond-Dupuis on 2024-11-27.
-//
 import SwiftUI
 
+// Home Screen View (Main Menu)
 // Home Screen View (Main Menu)
 struct HomeView: View {
     @StateObject private var gameState = GameState()  // Initialize GameState
     @State private var playerName: String = "Player"
     @State private var showingGameView = false
-    @State private var showingScoresView = false
     @State private var showingNameChangeView = false
 
     var body: some View {
@@ -36,20 +30,14 @@ struct HomeView: View {
                     }
                 }
 
-                // Button to view scores
-                if let currentWord = gameState.currentWord {
-                    NavigationLink(destination: ScoresView(word: currentWord.word)) {
-                        Button(action: {
-                            showingScoresView = true
-                        }) {
-                            Text("Afficher les scores")
-                                .font(.headline)
-                                .padding()
-                                .background(Color.blue)
-                                .foregroundColor(.white)
-                                .cornerRadius(10)
-                        }
-                    }
+                // Simplify the button to show scores view
+                NavigationLink(destination: ScoresView()) {
+                    Text("Afficher les scores")
+                        .font(.headline)
+                        .padding()
+                        .background(Color.blue)
+                        .foregroundColor(.white)
+                        .cornerRadius(10)
                 }
 
                 // Button to change player's name
@@ -80,6 +68,7 @@ struct HomeView: View {
         }
     }
 }
+
 
 // Name Change View
 struct NameChangeView: View {

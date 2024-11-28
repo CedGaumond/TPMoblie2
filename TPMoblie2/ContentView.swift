@@ -17,11 +17,17 @@ struct ContentView: View {
                         }
                     }
                 }
+
+                // You can optionally add a condition to activate the Scores link
+                Button("Go to Scores") {
+                    // Trigger the navigation when this button is pressed
+                    isScoresLinkActive = true
+                }
             }
             .navigationTitle("Charivari des mots")
             .navigationBarItems(trailing:
                 NavigationLink(
-                    destination: ScoresView(word: gameState.currentWord?.word ?? ""),
+                    destination: ScoresView(),
                     isActive: $isScoresLinkActive  // Use the binding to control navigation
                 ) {
                     Text("Scores")
