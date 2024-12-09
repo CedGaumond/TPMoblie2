@@ -1,76 +1,88 @@
 import SwiftUI
 
-extension Array {
-    subscript(safe index: Index) -> Element? {
-        return indices.contains(index) ? self[index] : nil
-    }
-}
-
+// Vue principale du jeu de manipulation de lettres
 struct GameView: View {
+    // Observation de l'état du jeu
     @ObservedObject var gameState: GameState
-    @State private var currentDragIndex: Int? = nil
-    @State private var letterOffset: CGSize = .zero
-    @State private var draggedLetter: Character? = nil
-    @State private var bottomLetters: [Character?] = []
-    @State private var isDropTargeted: [Bool] = []
-    @State private var dragStartLocation: CGPoint = .zero
-    @State private var dropAreaFrames: [CGRect] = []
-    @State private var isWordValid: Bool = false
-    @State private var isCorrectWord: Bool = false  // Track if the word is correct
-    @State private var showWinAlert: Bool = false  // Track if the win alert should be shown
-
-    @Environment(\.dismiss) private var dismiss  // Used for "popping back" to the previous screen
-
+    
+    // États locaux pour la gestion des interactions
+    @State private var currentDragIndex: Int? = nil // Index de la lettre actuellement déplacée
+    @State private var letterOffset: CGSize = .zero // Décalage de la lettre pendant le glissement
+    @State private var draggedLetter: Character? = nil // Lettre actuellement déplacée
+    @State private var bottomLetters: [Character?] = [] // Lettres placées dans la zone du bas
+    @State private var isDropTargeted: [Bool] = [] // Suivi des zones de dépôt ciblées
+    @State private var dragStartLocation: CGPoint = .zero // Point de départ du glissement
+    @State private var dropAreaFrames: [CGRect] = [] // Cadres des zones de dépôt
+    @State private var isWordValid: Bool = false // Validation du mot
+    @State private var isCorrectWord: Bool = false // Vérification si le mot est correct
+    @State private var showWinAlert: Bool = false // Affichage de l'alerte de victoire
+    
+    // Environnement pour fermer la vue
+    @Environment(\.dismiss) private var dismiss
+    
+    // Configuration de la grille adaptative
     let columns = [GridItem(.adaptive(minimum: 50))]
-
+    
+    // Initialisateur de la vue
     init(gameState: GameState) {
         self.gameState = gameState
+        // Affiche le mot courant dans la console
+        print(gameState.currentWord?.word)
     }
-
+    
+    // Corps principal de la vue
     var body: some View {
         NavigationStack {
             VStack {
+                // Titre du jeu
                 Text("Charivari des mots")
                     .font(.largeTitle)
                     .fontWeight(.bold)
                     .padding()
-
-                // Scrambled letters at the top
+                
+                // Grille des lettres mélangées en haut de l'écran
                 LazyVGrid(columns: columns, spacing: 10) {
                     ForEach(gameState.letters.indices, id: \.self) { index in
                         if let letter = gameState.letters[safe: index] {
-                            Text(String(letter))
+                            // Affichage de chaque lettre
+                            Text(String(letter).lowercased())
                                 .font(.title)
                                 .padding()
                                 .background(Color.gray.opacity(0.2))
                                 .cornerRadius(5)
+                            // Geste de tap pour placer la lettre
                                 .gesture(
                                     TapGesture()
                                         .onEnded {
+                                            // Trouve le premier emplacement vide et place la lettre
                                             if let firstEmptyIndex = bottomLetters.firstIndex(where: { $0 == nil }) {
                                                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                                                     bottomLetters[firstEmptyIndex] = letter
                                                     gameState.letters.remove(at: index)
-                                                    checkSolution()  // Check solution after every tap
+                                                    checkSolution()
                                                 }
                                             }
                                         }
                                 )
+                            // Geste de glissement pour déplacer la lettre
                                 .gesture(
                                     DragGesture(coordinateSpace: .global)
+                                    // Gestion du mouvement de glissement
                                         .onChanged { value in
+                                            // Initialise le glissement si pas déjà en cours
                                             if currentDragIndex == nil {
                                                 currentDragIndex = index
                                                 draggedLetter = letter
                                                 dragStartLocation = value.startLocation
                                             }
-
+                                            
+                                            // Calcul du décalage de la lettre
                                             letterOffset = CGSize(
                                                 width: value.location.x - dragStartLocation.x,
                                                 height: value.location.y - dragStartLocation.y
                                             )
-
-                                            // Highlight drop areas based on location
+                                            
+                                            // Gestion du survol des zones de dépôt
                                             let location = value.location
                                             for (idx, _) in bottomLetters.enumerated() {
                                                 if isLocationWithinDropArea(location, boxIndex: idx) {
@@ -88,77 +100,89 @@ struct GameView: View {
                                                 }
                                             }
                                         }
+                                    // Gestion de la fin du glissement
                                         .onEnded { value in
                                             let location = value.location
                                             var didDrop = false
-
+                                            
+                                            // Vérifie si la lettre a été déposée dans une zone valide
                                             for (idx, isTargeted) in isDropTargeted.enumerated() {
                                                 if isTargeted && bottomLetters[idx] == nil {
                                                     if let draggedLetter = draggedLetter,
                                                        let sourceIndex = currentDragIndex {
-                                                        // Successfully drop the letter in the target box
                                                         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                                            bottomLetters[idx] = draggedLetter  // Add to bottom box
-                                                            gameState.letters.remove(at: sourceIndex)  // Remove from top row
+                                                            bottomLetters[idx] = draggedLetter
+                                                            gameState.letters.remove(at: sourceIndex)
                                                         }
                                                         didDrop = true
-                                                        checkSolution()  // Check solution after every drop
+                                                        checkSolution()
                                                     }
                                                     break
                                                 }
                                             }
+                                            
+                                            // Gestion si la lettre n'a pas été déposée
                                             if !didDrop {
                                                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                                                     letterOffset = .zero
                                                 }
                                             }
-
+                                            
+                                            // Réinitialisation des états de glissement
                                             withAnimation(.easeOut(duration: 0.2)) {
                                                 isDropTargeted = Array(repeating: false, count: bottomLetters.count)
                                             }
+                                            
                                             currentDragIndex = nil
                                             draggedLetter = nil
                                         }
                                 )
+                            // Application de l'offset et de la profondeur lors du glissement
                                 .offset(currentDragIndex == index ? letterOffset : .zero)
                                 .zIndex(currentDragIndex == index ? 1 : 0)
                         }
                     }
                 }
                 .padding()
-
+                
                 Spacer()
-
-                // Only show the bottom boxes if the word is valid
-                if isWordValid, let currentWord = gameState.currentWord {
+                
+                // Zone de dépôt pour construire le mot (affichée uniquement quand un mot est disponible)
+                if let currentWord = gameState.currentWord?.word, currentWord.count > 0 {
                     VStack {
                         LazyVGrid(columns: columns, spacing: 10) {
                             ForEach(0..<bottomLetters.count, id: \.self) { index in
                                 ZStack {
+                                    // Cadre de la zone de dépôt
                                     Rectangle()
-                                        .strokeBorder(isDropTargeted[index] ? Color.green : Color.blue,
-                                                      lineWidth: isDropTargeted[index] ? 3 : 2)
+                                        .strokeBorder(isDropTargeted[index] ? Color.green : Color.blue, lineWidth: isDropTargeted[index] ? 3 : 2)
                                         .background(Color.gray.opacity(0.2))
                                         .frame(height: 50)
                                         .cornerRadius(10)
                                         .padding(.horizontal)
                                         .background(GeometryReader { geometry in
                                             Color.clear.onAppear {
-                                                // Capture the frame of the drop area
-                                                dropAreaFrames[index] = geometry.frame(in: .global)
+                                                // Mémorisation du cadre de la zone de dépôt
+                                                if index >= 0 && index < dropAreaFrames.count {
+                                                    dropAreaFrames[index] = geometry.frame(in: .global)
+                                                } else {
+                                                    print("Index \(index) est hors limites!")
+                                                }
                                             }
                                         })
+                                    // Geste de tap pour retirer une lettre
                                         .gesture(
                                             TapGesture()
                                                 .onEnded {
                                                     if let letter = bottomLetters[index] {
                                                         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                                            gameState.letters.append(letter)  // Add back to top row
-                                                            bottomLetters[index] = nil  // Remove from bottom row
+                                                            gameState.letters.append(letter)
+                                                            bottomLetters[index] = nil
                                                         }
                                                     }
                                                 }
                                         )
+                                    // Geste de glissement pour déplacer une lettre de la zone du bas
                                         .gesture(
                                             DragGesture(coordinateSpace: .global)
                                                 .onChanged { value in
@@ -174,34 +198,35 @@ struct GameView: View {
                                                 .onEnded { value in
                                                     let location = value.location
                                                     var didMove = false
-
-                                                    // Check if it's dragged back to the top row
+                                                    
+                                                    // Vérifie si la lettre peut être replacée dans la zone du haut
                                                     for (topIndex, _) in gameState.letters.enumerated() {
                                                         if isLocationWithinTopRow(location, boxIndex: topIndex) {
                                                             if let draggedLetter = draggedLetter,
                                                                bottomLetters[index] != nil {
                                                                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                                                    gameState.letters.insert(draggedLetter, at: topIndex) // Insert back to top row
-                                                                    bottomLetters[index] = nil  // Remove from bottom row
+                                                                    gameState.letters.insert(draggedLetter, at: topIndex)
+                                                                    bottomLetters[index] = nil
                                                                 }
                                                                 didMove = true
                                                             }
                                                             break
                                                         }
                                                     }
-
-                                                    // If no valid move, animate back to bottom row
+                                                    
+                                                    // Gestion si la lettre n'a pas été déplacée
                                                     if !didMove {
                                                         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                                                             letterOffset = .zero
                                                         }
                                                     }
-
+                                                    
                                                     letterOffset = .zero
                                                     draggedLetter = nil
                                                 }
                                         )
-
+                                    
+                                    // Affichage de la lettre dans la zone de dépôt
                                     if let letter = bottomLetters[index] {
                                         Text(String(letter))
                                             .font(.title)
@@ -213,96 +238,188 @@ struct GameView: View {
                         .padding()
                     }
                 }
-
+                
+                // Affichage du temps écoulé
                 Text("Time: \(Int(gameState.elapsedTime)) seconds")
                     .font(.headline)
                     .padding()
-
+                
+                // Affichage du score
+                Text("Score: \(gameState.score)")
+                    .font(.title2)
+                    .padding()
+                
+                // Bouton pour abandonner
+                Button(action: {
+                    // Arrête le chronomètre
+                    gameState.stopTimer()
+                    
+                    // Affiche l'alerte de fin de partie
+                    showWinAlert = true
+                    isCorrectWord = false
+                }) {
+                    Text("Donner sa langue au chat")
+                        .font(.title2)
+                        .padding()
+                        .background(Color.red.opacity(0.7))
+                        .foregroundColor(.white)
+                        .cornerRadius(10)
+                }
+                .padding()
             }
+            // Actions à l'apparition de la vue
             .onAppear {
-                Task {
-                    await gameState.fetchNewWord()
+                // Charge l'état du jeu sauvegardé si disponible
+                gameState.loadGameState()
+                
+                // Récupère un nouveau mot si aucun mot n'est présent
+                if gameState.currentWord?.word == nil {
+                    Task {
+                        await gameState.fetchNewWord()
+                    }
+                }
+                
+                // Initialise la zone de dépôt des lettres
+                if let currentWord = gameState.currentWord?.word {
+                    bottomLetters = Array(repeating: nil, count: currentWord.count)
+                    isDropTargeted = Array(repeating: false, count: bottomLetters.count)
+                    dropAreaFrames = Array(repeating: .zero, count: bottomLetters.count)
                 }
             }
+            // Réagit aux changements de mot
             .onChange(of: gameState.currentWord) { newWord in
-                if let currentWord = newWord, currentWord.word.count > 0 {
+                if let currentWord = newWord?.word, currentWord.count > 0 {
                     isWordValid = true
-                    bottomLetters = Array(repeating: nil, count: currentWord.word.count)
+                    bottomLetters = Array(repeating: nil, count: currentWord.count)
                     isDropTargeted = Array(repeating: false, count: bottomLetters.count)
                     dropAreaFrames = Array(repeating: .zero, count: bottomLetters.count)
                 } else {
                     isWordValid = false
                 }
             }
+            // Gestion des alertes de fin de partie
             .alert(isPresented: $showWinAlert) {
-                Alert(
-                    title: Text("Bravo, vous avez trouvé le mot!"),
-                    message: Text("Vous avez terminé le jeu."),
-                    primaryButton: .default(Text("Jouer une nouvelle partie")) {
-                        resetGame()  // Call your reset game function
-                    },
-                    secondaryButton: .cancel(Text("Retour au menu")) {
-                        dismiss()  // Pop back to the previous view (menu)
-                    }
-                )
+                if isCorrectWord {
+                    // Alerte en cas de victoire
+                    return Alert(
+                        title: Text("Bravo, vous avez trouvé le mot!"),
+                        message: Text("Votre score est \(gameState.score)"),
+                        primaryButton: .default(Text("Jouer une nouvelle partie")) {
+                            resetGame()
+                        },
+                        secondaryButton: .cancel(Text("Retour au menu")) {
+                            resetGame()
+                            dismiss()
+                        }
+                    )
+                } else {
+                    // Alerte en cas d'échec
+                    return Alert(
+                        title: Text("Meilleure chance la prochaine fois!"),
+                        message: Text("Le mot était: \(gameState.currentWord?.word ?? "")"),
+                        primaryButton: .default(Text("Jouer une nouvelle partie")) {
+                            resetGame()
+                        },
+                        secondaryButton: .cancel(Text("Retour au menu")) {
+                            resetGame()
+                            dismiss()
+                        }
+                    )
+                }
+            }
+            // Sauvegarde de l'état du jeu à la disparition de la vue
+            .onDisappear {
+                gameState.saveGameState()
             }
         }
     }
-
+    
+    // Vérifie si un point se trouve dans une zone de dépôt
     private func isLocationWithinDropArea(_ location: CGPoint, boxIndex: Int) -> Bool {
         let dropAreaFrame = dropAreaFrames[boxIndex]
         return dropAreaFrame.contains(location)
     }
-
+    
+    // Vérifie si un point se trouve dans la ligne supérieure
     private func isLocationWithinTopRow(_ location: CGPoint, boxIndex: Int) -> Bool {
-        let boxWidth: CGFloat = 70
-        let boxHeight: CGFloat = 50
-        let boxSpacing: CGFloat = 10
-        let startX: CGFloat = 50 + (boxWidth + boxSpacing) * CGFloat(boxIndex)
-
-        let dropAreaY: CGFloat = 100
-        let dropAreaBottomY = dropAreaY + boxHeight
-
+        let boxWidth: CGFloat = 70  // Largeur d'une case
+        let boxHeight: CGFloat = 50  // Hauteur d'une case
+        let boxSpacing: CGFloat = 10  // Espacement entre les cases
+        let startX: CGFloat = 50 + (boxWidth + boxSpacing) * CGFloat(boxIndex)  // Position X de la première case en fonction de l'index
+        
+        let dropAreaY: CGFloat = 100  // Position Y du début de la zone de dépôt
+        let dropAreaBottomY = dropAreaY + boxHeight  // Position Y de la fin de la zone de dépôt
+        
+        // Vérifie si les coordonnées du point sont dans la zone de la ligne supérieure
         return location.x >= startX && location.x <= startX + boxWidth &&
-               location.y >= dropAreaY && location.y <= dropAreaBottomY
+        location.y >= dropAreaY && location.y <= dropAreaBottomY
     }
-
+    
+    // Vérifie si la solution est correcte
     private func checkSolution() {
-        let solution = bottomLetters.compactMap { $0 }
-        let solutionWord = String(solution)
+        let solution = bottomLetters.compactMap { $0 }  // Récupère les lettres de la solution
+        let solutionWord = String(solution).lowercased()  // Crée un mot avec les lettres en minuscule
         
-        // Check if the word is correct
-        isCorrectWord = solutionWord == gameState.currentWord?.word
-        
-        if isCorrectWord {
-            // Stop the timer when the player wins
-            gameState.stopTimer()
-
-            // Save the solved word to UserDefaults
-            if let currentWord = gameState.currentWord {
-                let timeTaken = Int(gameState.elapsedTime)
-
-                // Create a Word object using the solutionWord and currentWord.secret
-                let solvedWord = Word(word: solutionWord, secret: currentWord.word)
-
-                // Save the solved word with its time
-                SolvedWordsManager.shared.saveSolvedWord(
-                    word: solvedWord,  // Pass the Word object
-                    time: timeTaken    // Pass the time taken
-                )
+        // Vérifie si le mot de la solution correspond au mot actuel
+        if let currentWord = gameState.currentWord?.word {
+            if solutionWord.lowercased() == currentWord.lowercased() {  // Compare le mot de la solution avec le mot actuel
+                isCorrectWord = true  // Marque le mot comme correct
+                showWinAlert = true  // Affiche l'alerte de victoire
+                submitScore()  // Soumet le score
+                gameState.stopTimer()  // Arrête le chronomètre
+            } else {
+                isCorrectWord = false  // Marque le mot comme incorrect
             }
-            
-            // Show the win alert
-            showWinAlert = true
         }
     }
-
-
+    
+    // Soumet le score à un service externe
+    private func submitScore() {
+        // Vérifie si le mot actuel existe
+        if let currentWord = gameState.currentWord?.word {
+            // Sauvegarde le mot résolu localement
+            SolvedWordsManager.shared.saveSolvedWord(
+                word: currentWord,  // Mot actuel
+                secret: gameState.currentWord?.secret ?? "",  // Secret du mot actuel
+                time: Int(gameState.elapsedTime),  // Temps écoulé
+                score: gameState.score  // Score du joueur
+            )
+            
+            Task {
+                do {
+                    // S'assure que `currentWord` est déballé avant de procéder
+                    guard let currentWord = gameState.currentWord else {
+                        print("Aucun mot actuel disponible")  // Si aucun mot n'est disponible, affiche un message d'erreur
+                        return
+                    }
+                    
+                    // Formatte le mot pour qu'il commence par une majuscule et le reste en minuscule
+                    let formattedWord = currentWord.word
+                    let formattedWordWithCapital = formattedWord.prefix(1).uppercased() + formattedWord.dropFirst().lowercased()
+                    
+                    // Envoie le score au serveur
+                    try await NetworkService.submitScore(
+                        word: formattedWord,  // Mot formaté
+                        secret: gameState.currentWord?.secret ?? "",  // Secret du mot actuel
+                        name: "Cedrik",  // Nom du joueur
+                        score: gameState.score  // Score du joueur
+                    )
+                } catch {
+                    print("Échec de la soumission du score : \(error)")  // En cas d'erreur, affiche un message d'erreur
+                }
+            }
+        }
+    }
+    
+    // Réinitialise l'état du jeu
     private func resetGame() {
-        gameState.reset()  // Assuming `reset()` is a method in `GameState`
-        showWinAlert = false  // Hide the alert
+        // Efface les données sauvegardées dans UserDefaults
+        UserDefaults.standard.removeObject(forKey: "gameStateKey")
+        
+        // Réinitialise l'état du jeu
+        gameState.reset()
         Task {
-            await gameState.fetchNewWord()  // Fetch a new word after resetting
+            await gameState.fetchNewWord()  // Récupère un nouveau mot pour commencer une nouvelle partie
         }
     }
 }

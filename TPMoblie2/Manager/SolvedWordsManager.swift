@@ -1,35 +1,37 @@
-// Update the SolvedWordsManager to correctly save and load solved words
-import SwiftUI
+import Foundation
 class SolvedWordsManager {
     static let shared = SolvedWordsManager()
     private let solvedWordsKey = "solvedWords" // Key for storing solved words in UserDefaults
 
     // Function to save a solved word in UserDefaults
-    func saveSolvedWord(word: Word, time: Int) {
-        var solvedWords = loadSolvedWords()  // Load existing solved words
-
-        // Create a SolvedWord object to be saved
-        let solvedWordEntry = SolvedWord(word: word, time: time)
-
-        // Append the solved word entry to the list
-        solvedWords.append(solvedWordEntry)
-
+    func saveSolvedWord(word: String, secret: String, time: Int, score: Int) {
+        // Load the existing solved words from UserDefaults
+        var solvedWords = loadSolvedWords()
+        
+        // Create a Word object
+        let solvedWord = SolvedWord(word: Word(word: word, secret: secret), time: time, score: score)
+        
+        // Append the solved word to the list
+        solvedWords.append(solvedWord)
+        
         // Save the updated list back to UserDefaults
-        let encoder = JSONEncoder()
-        if let encoded = try? encoder.encode(solvedWords) {
-            UserDefaults.standard.set(encoded, forKey: solvedWordsKey)
-            print("Solved word saved: \(solvedWordEntry)")  // Debugging output
+        if let encodedData = try? JSONEncoder().encode(solvedWords) {
+            UserDefaults.standard.set(encodedData, forKey: solvedWordsKey)
         }
     }
 
+    // Function to load the solved words from UserDefaults
     func loadSolvedWords() -> [SolvedWord] {
-        guard let data = UserDefaults.standard.data(forKey: solvedWordsKey),
-              let decoded = try? JSONDecoder().decode([SolvedWord].self, from: data) else {
-            print("No solved words found or failed to decode.")
-            return []
+        // Return the list of solved words or an empty list if no data is available
+        if let savedData = UserDefaults.standard.data(forKey: solvedWordsKey),
+           let decodedWords = try? JSONDecoder().decode([SolvedWord].self, from: savedData) {
+            return decodedWords
         }
-        return decoded
+        return []
     }
 
+    // Function to clear all solved words from UserDefaults
+    func clearSolvedWords() {
+        UserDefaults.standard.removeObject(forKey: solvedWordsKey)
+    }
 }
-
